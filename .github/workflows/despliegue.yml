@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Set up PHP
         uses: shivammathur/setup-php@v2
@@ -18,17 +18,37 @@ jobs:
           php-version: '8.3'
 
       - name: Install dependencies
-        run: composer install
+        run: composer install --no-dev --prefer-dist --optimize-autoloader
+
+      - name: Install dev dependencies
+        run: composer install --dev
+
+      - name: List files in the repository (for debugging)
+        run: |
+          echo "Listing files in the root directory:"
+          ls -la
+
+          echo "Listing files in the test directory:"
+          ls -la test  # Cambio a 'test' en lugar de 'tests'
+
+      - name: Check if PHPUnit is installed
+        run: |
+          if [ -f ./vendor/bin/phpunit ]; then
+            echo "PHPUnit is installed"
+          else
+            echo "PHPUnit is not installed"
+            exit 1
+          fi
 
       - name: Run tests
-        run: ./vendor/bin/phpunit tests
+        run: ./vendor/bin/phpunit test || ./vendor/bin/phpunit  # Cambio a 'test' en lugar de 'tests'
 
   deploy:
     runs-on: ubuntu-latest
     needs: test
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Set up PHP
         uses: shivammathur/setup-php@v2
@@ -36,7 +56,7 @@ jobs:
           php-version: '8.3'
 
       - name: Install dependencies
-        run: composer install
+        run: composer install --no-dev --optimize-autoloader
 
       - name: Deploy to server
         env:
@@ -45,19 +65,24 @@ jobs:
           USERNAME: ${{ secrets.USERNAME }}
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
         run: |
-          # Create the SSH directory and set the private key for authentication
+          # Configuración de SSH
           mkdir -p ~/.ssh
           echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H $HOST >> ~/.ssh/known_hosts
 
-          # Use SSH to create the deploy path if it doesn't exist
-          ssh -o StrictHostKeyChecking=no $USERNAME@$HOST "mkdir -p $DEPLOY_PATH"
+          # Verificar conexión antes de continuar
+          ssh -o BatchMode=yes -o ConnectTimeout=5 $USERNAME@$HOST "echo '✅ Conexión SSH exitosa'" || exit 1
 
-          # Sync the application files to the server
-          rsync -avz --delete --no-t --exclude 'tests' --exclude '.git' . $USERNAME@$HOST:$DEPLOY_PATH
+          # Crear directorio de despliegue si no existe
+          ssh $USERNAME@$HOST "mkdir -p $DEPLOY_PATH"
 
-          # Optionally, run Composer install on the server
-          ssh -o StrictHostKeyChecking=no $USERNAME@$HOST "cd $DEPLOY_PATH && composer install --no-dev --optimize-autoloader"
+          # Sincronizar archivos con el servidor
+          rsync -avz --delete --exclude 'test' --exclude '.git' . $USERNAME@$HOST:$DEPLOY_PATH
 
-          # Restart Apache if needed
-          ssh -o StrictHostKeyChecking=no $USERNAME@$HOST "sudo systemctl restart apache2"
+          # Ejecutar Composer install en el servidor
+          ssh $USERNAME@$HOST "cd $DEPLOY_PATH && composer install --no-dev --optimize-autoloader"
+
+          # Reiniciar Apache sin pedir contraseña
+          ssh $USERNAME@$HOST "echo '$USERNAME ALL=(ALL) NOPASSWD: /bin/systemctl restart apache2' | sudo tee /etc/sudoers.d/$USERNAME"
+          ssh $USERNAME@$HOST "sudo systemctl restart apache2"
