@@ -38,12 +38,6 @@ jobs:
       - name: Install dependencies
         run: composer install
 
-      - name: Debug environment variables (for troubleshooting)
-        run: |
-          echo "USERNAME: $USERNAME"
-          echo "HOST: $HOST"
-          echo "DEPLOY_PATH: $DEPLOY_PATH"
-      
       - name: Deploy to server
         env:
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
@@ -56,11 +50,11 @@ jobs:
           echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
 
-          # Use SSH to create the deploy path if it doesn't exist
-          ssh -o StrictHostKeyChecking=no $USERNAME@$HOST "mkdir -p $DEPLOY_PATH"
+          # Create the deploy directory with correct permissions
+          ssh -o StrictHostKeyChecking=no $USERNAME@$HOST "sudo mkdir -p \"$DEPLOY_PATH\" && sudo chown -R $USERNAME:$USERNAME \"$DEPLOY_PATH\""
 
           # Sync the application files to the server
-          rsync -avz --delete --no-t --exclude 'tests' --exclude '.git' ./ "$USERNAME@$HOST:$DEPLOY_PATH"
+          rsync -avz --delete --no-t --exclude 'tests' --exclude '.git' ./ "$USERNAME@$HOST:\"$DEPLOY_PATH\""
 
           # Optionally, run Composer install on the server
           ssh -o StrictHostKeyChecking=no $USERNAME@$HOST "cd $DEPLOY_PATH && composer install --no-dev --optimize-autoloader"
