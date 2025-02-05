@@ -62,7 +62,7 @@ jobs:
           ssh -o StrictHostKeyChecking=no $USERNAME@$HOST "sudo systemctl restart apache2"
       
       - name: Build Docker image
-        run: docker build -t ${{ secrets.DOCKER_USERNAME }}/holaMundo:${{ github.sha }} .
+        run: docker build -t ${{ secrets.DOCKER_USERNAME }}/holamundo:${{ github.sha }} .
       
       - name: Log in to Docker Hub
         uses: docker/login-action@v2
@@ -71,5 +71,5 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
       
       - name: Push Docker image to Docker Hub
-        run: docker push ${{ secrets.DOCKER_USERNAME }}/holaMundo:${{ github.sha }}
+        run: docker push ${{ secrets.DOCKER_USERNAME }}/holamundo:${{ github.sha }}
 
