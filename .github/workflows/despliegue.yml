@@ -1,4 +1,5 @@
 name: CI/CD Pipeline for HolaMundoMultilenguaje
+
 on:
   push:
     branches:
@@ -10,12 +11,15 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
+
       - name: Set up PHP
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
+
       - name: Install dependencies
         run: composer install
+
       - name: Run tests
         run: ./vendor/bin/phpunit tests
 
@@ -25,18 +29,15 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
+
       - name: Set up PHP
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
+
       - name: Install dependencies
         run: composer install
-      - name: Set up SSH
-        run: |
-          mkdir -p ~/.ssh
-          echo "$SSH_PRIVATE_KEY" | base64 --decode > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H $HOST >> ~/.ssh/known_hosts
+
       - name: Deploy to server
         env:
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
@@ -44,11 +45,19 @@ jobs:
           USERNAME: ${{ secrets.USERNAME }}
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
         run: |
-          # Create the deploy path if it doesn't exist
+          # Create the SSH directory and set the private key for authentication
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+
+          # Use SSH to create the deploy path if it doesn't exist
           ssh -o StrictHostKeyChecking=no $USERNAME@$HOST "mkdir -p $DEPLOY_PATH"
-          # Sync files to the server
+
+          # Sync the application files to the server
           rsync -avz --delete --no-t --exclude 'tests' --exclude '.git' . $USERNAME@$HOST:$DEPLOY_PATH
-          # Optionally, install composer dependencies on the server
+
+          # Optionally, run Composer install on the server
           ssh -o StrictHostKeyChecking=no $USERNAME@$HOST "cd $DEPLOY_PATH && composer install --no-dev --optimize-autoloader"
+
           # Restart Apache if needed
           ssh -o StrictHostKeyChecking=no $USERNAME@$HOST "sudo systemctl restart apache2"
